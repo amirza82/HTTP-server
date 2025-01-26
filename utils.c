@@ -189,18 +189,20 @@ int handle_conn(int connfd)
                 fprintf(stderr, "%s:%d:%s\n", __FILE_NAME__, __LINE__, strerror(errno));
                 return -1;
             }
-            hi.filesize -= fwrite(recvline+seek, sizeof (char), (hi.filesize <= MAXLINE-seek) ? hi.filesize : MAXLINE-seek, filep);
-            if (hi.filesize == -1)
-                INVALID_REQ("filad to write:");
-            while (hi.filesize) {
-                if ((read_bytes = read(connfd, recvline, sizeof (recvline))) == -1)
-                    INVALID_REQ("faild to read from socket:");
-                if ((write_bytes = fwrite(recvline, sizeof (char), read_bytes, filep)) == -1)
-                    INVALID_REQ("faild to write:");
-                if (read_bytes != write_bytes)
-                    INVALID_REQ("faild to write:");
-                else
-                    hi.filesize -= write_bytes;
+            memcpy(recvline, recvline+seek, n-seek); // exclude the header
+            n -= seek; // n = amount of data to write
+            seek = 0; // reset
+            while (true) {
+                while (seek != n) { // write the full buffer
+                    if ((seek += fwrite(recvline+seek, sizeof (char), n-seek, filep)) == -1)
+                        INVALID_REQ("fwrite faild");
+                }
+                seek = 0;
+                hi.filesize -= n;
+                if (hi.filesize == 0)
+                    break;
+                if ((n = read(connfd, recvline, sizeof recvline)) == -1)
+                    INVALID_REQ("read faild");
             }
             break;
         default:
